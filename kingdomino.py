@@ -11,6 +11,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
 # Main function containing the backbone of the program
+from point_calculator import calculate_score
+
 def main():
     print("+-------------------------------+")
     print("| King Domino points calculator |")
@@ -19,15 +21,16 @@ def main():
     # Train the Random Forest model
     model, feature_cols, label_encoder = train_model()
 
-    # Pre-load crown templates
+    # Pre-load crown templates (Brug relative stier så det virker for alle på GitHub)
     template_paths = [
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_nord.jpg",
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.png"
+        r"features\kongekrone_nord.jpg",
+        r"features\kongekrone_syd.png"
     ]
     crown_templates = [cv.imread(path, cv.IMREAD_GRAYSCALE) for path in template_paths]
     crown_templates = [t for t in crown_templates if t is not None] # Filter out any that failed to load
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\2.jpg"
+    # Her kan du ændre stien til det billede, du vil teste!
+    image_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\1.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
@@ -35,6 +38,21 @@ def main():
     image = cv.imread(image_path)
     tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates)
     print(len(tiles))
+    
+    # Kør pointberegneren på den genererede `tiles` dict!
+    final_score, clusters = calculate_score(tiles)
+    print(f"\n======== RESULTAT ========")
+    print(f"Billedets samlede score: {final_score}")
+    print(f"==========================\n")
+    
+    print("\n======== DETALJERET REGNSKAB ========")
+    for i, cluster in enumerate(clusters, 1):
+        print(f"Område {i}: {cluster['terrain']}")
+        print(f"  Felter i alt: {cluster['tiles_count']}, Kroner i alt: {cluster['crowns_count']} => {cluster['score']} Point")
+        print(f"  Består af koordinaterne: {cluster['coordinates']}")
+        print("---------------------------------------")
+    print("=====================================\n")
+    
     # Sort the tiles by their (y, x) coordinates before printing
     for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
         print(f"Tile ({x}, {y}):")
@@ -44,7 +62,7 @@ def main():
 
 def train_model():
     # Load the training data
-    training_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    training_path = r"Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 
