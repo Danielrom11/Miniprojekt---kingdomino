@@ -19,19 +19,27 @@ def main():
     # Train the Random Forest model
     model, feature_cols, label_encoder = train_model()
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino\Trainingset\1.jpg"
+    # Pre-load crown templates
+    template_paths = [
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_nord.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.png"
+    ]
+    crown_templates = [cv.imread(path, cv.IMREAD_GRAYSCALE) for path in template_paths]
+    crown_templates = [t for t in crown_templates if t is not None] # Filter out any that failed to load
+
+    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\2.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
 
     image = cv.imread(image_path)
-    tiles = get_tiles(image, model, feature_cols, label_encoder)
+    tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates)
     print(len(tiles))
-    for (x, y), tile_data in tiles.items():
+    # Sort the tiles by their (y, x) coordinates before printing
+    for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
         print(f"Tile ({x}, {y}):")
         print(f"  Predicted Terrain: {tile_data['terrain']}")
-        # print(tile_data["terrain_features"])
-        print(f"  Crown crop shape: {tile_data['crown_crop'].shape}")
+        print(f"  Crowns: {tile_data['crowns']}")
         print("=====")
 
 def train_model():
@@ -58,26 +66,33 @@ def train_model():
     y_encoded = label_encoder.fit_transform(y)
 
     # Initialize and train the model
-    model = RandomForestClassifier(random_state=42, n_estimators=200, max_depth=None, min_samples_split=5)
+    model = RandomForestClassifier(random_state=42, n_estimators=100, max_depth=None, min_samples_split=10)
     model.fit(X, y_encoded)
 
     return model, feature_cols, label_encoder
 
 # Break a board into tiles
-def get_tiles(image, model, feature_cols, label_encoder):
+def get_tiles(image, model, feature_cols, label_encoder, crown_templates):
     tiles = {}
     for y in range(5):
         for x in range(5):
-            tile = image[y * 100 : (y + 1) * 100, x * 100 : (x + 1) * 100]
-            terrain_features = get_terrain(tile)
-            predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
-            tiles[(x, y)] = {
-                "tile": tile,
-                "crown_crop": crop_tile_center(tile),
-                "terrain_features": terrain_features,
-                "terrain": predicted_terrain,
-                "crowns": None,
-            }
+            try:
+                tile = image[y * 100 : (y + 1) * 100, x * 100 : (x + 1) * 100]
+                terrain_features = get_terrain(tile)
+                predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
+                
+                crown_crop_img = crop_tile_center(tile)
+                num_crowns = detect_crowns(crown_crop_img, crown_templates)
+
+                tiles[(x, y)] = {
+                    "tile": tile,
+                    "crown_crop": crown_crop_img,
+                    "terrain_features": terrain_features,
+                    "terrain": predicted_terrain,
+                    "crowns": num_crowns,
+                }
+            except Exception as e:
+                print(f"Error processing tile ({x}, {y}): {e}")
     return tiles
 
 def crop_tile_center(tile, box_size=35):
@@ -148,6 +163,47 @@ def predict_terrain(terrain_features, model, feature_cols, label_encoder):
     prediction_encoded = model.predict(features_df)
     prediction = label_encoder.inverse_transform(prediction_encoded)
     return prediction[0]
+
+def detect_crowns(tile_image, templates):
+    """
+    Detects and counts crowns in a given tile image.
+    """
+    search_image = cv.split(tile_image)[0]
+
+    all_found_rects = []
+    detection_threshold = 0.70
+
+    for original_template in templates:
+
+        for scale in np.linspace(1.0, 0.2, 50):
+            resized_w = int(original_template.shape[1] * scale)
+            resized_h = int(original_template.shape[0] * scale)
+            if resized_w < 15 or resized_h < 15:
+                continue
+            
+            resized_t = cv.resize(original_template, (resized_w, resized_h))
+            
+            for angle in [0, 90, 180, 270]:
+                if angle == 0:
+                    curr_t = resized_t
+                elif angle == 90:
+                    curr_t = cv.rotate(resized_t, cv.ROTATE_90_CLOCKWISE)
+                elif angle == 180:
+                    curr_t = cv.rotate(resized_t, cv.ROTATE_180)
+                elif angle == 270:
+                    curr_t = cv.rotate(resized_t, cv.ROTATE_90_COUNTERCLOCKWISE)
+                
+                res = cv.matchTemplate(search_image, curr_t, cv.TM_CCOEFF_NORMED)
+                
+                loc = np.where(res >= detection_threshold)
+                
+                h, w = curr_t.shape
+                for pt in zip(*loc[::-1]):
+                    all_found_rects.append([int(pt[0]), int(pt[1]), int(w), int(h)])
+
+    rects, _ = cv.groupRectangles(all_found_rects, groupThreshold=1, eps=0.5)
+    
+    return len(rects)
 
 
 if __name__ == "__main__":

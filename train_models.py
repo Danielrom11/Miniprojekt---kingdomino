@@ -53,9 +53,9 @@ def main():
         "Random Forest": (
             RandomForestClassifier(random_state=42),
             {
-                "n_estimators": [100, 200],
-                "max_depth": [None, 10],
-                "min_samples_split": [2, 5],
+                "n_estimators": [100, 200, 300, 400, 500],
+                "max_depth": [None, 10, 20, 30],
+                "min_samples_split": [2, 5, 10],
             },
         ),
         "SVC": (
@@ -75,9 +75,9 @@ def main():
                 tree_method="hist",
             ),
             {
-                "n_estimators": [100, 200],
-                "max_depth": [4, 6],
-                "learning_rate": [0.05, 0.1],
+                "n_estimators": [100, 200, 300, 400, 500],
+                "max_depth": [4, 6, 8, 10],
+                "learning_rate": [0.05, 0.1, 0.15],
                 "subsample": [0.8],
                 "colsample_bytree": [0.8],
             },
