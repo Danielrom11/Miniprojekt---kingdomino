@@ -1,14 +1,12 @@
 import os
-
 import cv2 as cv
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
-
-
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
+from point_calculator import calculate_score
 
 # Main function containing the backbone of the program
 def main():
@@ -25,16 +23,42 @@ def main():
         r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.png"
     ]
     crown_templates = [cv.imread(path, cv.IMREAD_GRAYSCALE) for path in template_paths]
-    crown_templates = [t for t in crown_templates if t is not None] # Filter out any that failed to load
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\2.jpg"
+    # Canny edge detection thresholds
+    search_thresh1 = 150
+    search_thresh2 = 180
+    template_thresh1 = 185
+    template_thresh2 = 200
+
+    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\7.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
 
     image = cv.imread(image_path)
-    tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates)
+    tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
     print(len(tiles))
+    # Sort the tiles by their (y, x) coordinates before printing
+    for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
+        print(f"Tile ({x}, {y}):")
+        print(f"  Predicted Terrain: {tile_data['terrain']}")
+        print(f"  Crowns: {tile_data['crowns']}")
+        print("=====")
+
+     # Kør pointberegneren på den genererede tiles dict!
+    final_score, clusters = calculate_score(tiles)
+    print(f"\n======== RESULTAT ========")
+    print(f"Billedets samlede score: {final_score}")
+    print(f"==========================\n")
+    
+    print("\n======== DETALJERET REGNSKAB ========")
+    for i, cluster in enumerate(clusters, 1):
+        print(f"Område {i}: {cluster['terrain']}")
+        print(f"  Felter i alt: {cluster['tiles_count']}, Kroner i alt: {cluster['crowns_count']} => {cluster['score']} Point")
+        print(f"  Består af koordinaterne: {cluster['coordinates']}")
+        print("---------------------------------------")
+    print("=====================================\n")
+    
     # Sort the tiles by their (y, x) coordinates before printing
     for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
         print(f"Tile ({x}, {y}):")
@@ -72,19 +96,19 @@ def train_model():
     return model, feature_cols, label_encoder
 
 # Break a board into tiles
-def get_tiles(image, model, feature_cols, label_encoder, crown_templates):
+def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2):
     tiles = {}
-    for y in range(5):
-        for x in range(5):
+    for y_coord in range(5):
+        for x_coord in range(5):
             try:
-                tile = image[y * 100 : (y + 1) * 100, x * 100 : (x + 1) * 100]
+                tile = image[y_coord * 100 : (y_coord + 1) * 100, x_coord * 100 : (x_coord + 1) * 100]
                 terrain_features = get_terrain(tile)
                 predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
                 
                 crown_crop_img = crop_tile_center(tile)
-                num_crowns = detect_crowns(crown_crop_img, crown_templates)
+                num_crowns = detect_crowns(crown_crop_img, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
 
-                tiles[(x, y)] = {
+                tiles[(x_coord, y_coord)] = {
                     "tile": tile,
                     "crown_crop": crown_crop_img,
                     "terrain_features": terrain_features,
@@ -92,10 +116,10 @@ def get_tiles(image, model, feature_cols, label_encoder, crown_templates):
                     "crowns": num_crowns,
                 }
             except Exception as e:
-                print(f"Error processing tile ({x}, {y}): {e}")
+                print(f"An unexpected error occurred processing tile ({x_coord}, {y_coord}): {e}")
     return tiles
 
-def crop_tile_center(tile, box_size=35):
+def crop_tile_center(tile, box_size=30):
     tile_height, tile_width = tile.shape[:2]
     hole_height = min(tile_height, max(1, int(box_size)))
     hole_width = min(tile_width, max(1, int(box_size)))
@@ -104,7 +128,9 @@ def crop_tile_center(tile, box_size=35):
 
     masked_tile = tile.copy()
     masked_tile[start_y : start_y + hole_height, start_x : start_x + hole_width] = 0
-    return masked_tile
+    
+    # Return only the blue channel of the masked tile
+    return cv.split(masked_tile)[0]
 
 # Determine the type of terrain in a tile
 def get_terrain(tile, bin_size=10):
@@ -164,18 +190,19 @@ def predict_terrain(terrain_features, model, feature_cols, label_encoder):
     prediction = label_encoder.inverse_transform(prediction_encoded)
     return prediction[0]
 
-def detect_crowns(tile_image, templates):
+def detect_crowns(search_image, templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2):
     """
-    Detects and counts crowns in a given tile image.
+    Detects crowns using template matching and verifies with Canny edge comparison.
     """
-    search_image = cv.split(tile_image)[0]
+    potential_matches = []
+    template_matching_threshold = 0.7  # Initial threshold for finding potential crowns
 
-    all_found_rects = []
-    detection_threshold = 0.70
-
+    # --- Step 1: Initial Template Matching ---
     for original_template in templates:
+        if original_template is None:
+            continue
 
-        for scale in np.linspace(1.0, 0.2, 50):
+        for scale in np.linspace(0.8, 0.2, 25):
             resized_w = int(original_template.shape[1] * scale)
             resized_h = int(original_template.shape[0] * scale)
             if resized_w < 15 or resized_h < 15:
@@ -193,15 +220,43 @@ def detect_crowns(tile_image, templates):
                 elif angle == 270:
                     curr_t = cv.rotate(resized_t, cv.ROTATE_90_COUNTERCLOCKWISE)
                 
+                # Match on the original grayscale images
                 res = cv.matchTemplate(search_image, curr_t, cv.TM_CCOEFF_NORMED)
-                
-                loc = np.where(res >= detection_threshold)
+                loc = np.where(res >= template_matching_threshold)
                 
                 h, w = curr_t.shape
                 for pt in zip(*loc[::-1]):
-                    all_found_rects.append([int(pt[0]), int(pt[1]), int(w), int(h)])
+                    # Store the potential match rectangle and the template used
+                    potential_matches.append(([int(pt[0]), int(pt[1]), int(w), int(h)], curr_t))
 
-    rects, _ = cv.groupRectangles(all_found_rects, groupThreshold=1, eps=0.5)
+    # --- Step 2: Verification with Canny Edge Matching ---
+    confirmed_rects = []
+    edge_similarity_threshold = 0.15  # Threshold for the edge comparison step
+
+    search_edges = cv.Canny(search_image, search_thresh1, search_thresh2)
+
+    for rect, template in potential_matches:
+        x, y, w, h = rect
+        
+        # Get the region of interest (ROI) from the search image's edges
+        roi_edges = search_edges[y:y+h, x:x+w]
+        
+        # Get the edges of the template that made the match
+        template_edges = cv.Canny(template, template_thresh1, template_thresh2)
+        
+        # Ensure template_edges is not larger than roi_edges
+        if template_edges.shape[0] > roi_edges.shape[0] or template_edges.shape[1] > roi_edges.shape[1]:
+            continue
+
+        # Compare the ROI edges with the template edges
+        edge_res = cv.matchTemplate(roi_edges, template_edges, cv.TM_CCOEFF_NORMED)
+        
+        # If the edges are a good match, confirm the detection
+        if np.max(edge_res) >= edge_similarity_threshold:
+            confirmed_rects.append(rect)
+
+    # Group the confirmed rectangles to merge overlapping boxes
+    rects, _ = cv.groupRectangles(confirmed_rects, groupThreshold=1, eps=0.5)
     
     return len(rects)
 

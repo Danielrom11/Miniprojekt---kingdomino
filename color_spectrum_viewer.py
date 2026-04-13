@@ -33,21 +33,8 @@ def display_image_color_spectrums(image_path):
     spectrum_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     spectrum_gray = cv2.cvtColor(spectrum_gray, cv2.COLOR_GRAY2RGB)  # Convert back to RGB for display
     
-    # 3-5. Individual RGB channels with color tint
+    # 3-5. Individual RGB channels (grayscale)
     b_channel, g_channel, r_channel = cv2.split(image_bgr)
-    
-    # Create color-tinted versions of each channel
-    r_channel_colored = np.zeros_like(image_bgr)
-    r_channel_colored[:, :, 2] = r_channel  # Red channel in BGR
-    r_channel_rgb = cv2.cvtColor(r_channel_colored, cv2.COLOR_BGR2RGB)
-    
-    g_channel_colored = np.zeros_like(image_bgr)
-    g_channel_colored[:, :, 1] = g_channel  # Green channel in BGR
-    g_channel_rgb = cv2.cvtColor(g_channel_colored, cv2.COLOR_BGR2RGB)
-    
-    b_channel_colored = np.zeros_like(image_bgr)
-    b_channel_colored[:, :, 0] = b_channel  # Blue channel in BGR
-    b_channel_rgb = cv2.cvtColor(b_channel_colored, cv2.COLOR_BGR2RGB)
     
     # 6. YUV
     spectrum_yuv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2YUV)
@@ -71,16 +58,16 @@ def display_image_color_spectrums(image_path):
     axes[1].set_title('Grayscale')
     axes[1].axis('off')
     
-    axes[2].imshow(r_channel_rgb)
-    axes[2].set_title('Red Channel')
+    axes[2].imshow(r_channel, cmap='gray')
+    axes[2].set_title('Red Channel (Grayscale)')
     axes[2].axis('off')
     
-    axes[3].imshow(g_channel_rgb)
-    axes[3].set_title('Green Channel')
+    axes[3].imshow(g_channel, cmap='gray')
+    axes[3].set_title('Green Channel (Grayscale)')
     axes[3].axis('off')
     
-    axes[4].imshow(b_channel_rgb)
-    axes[4].set_title('Blue Channel')
+    axes[4].imshow(b_channel, cmap='gray')
+    axes[4].set_title('Blue Channel (Grayscale)')
     axes[4].axis('off')
     
     axes[5].imshow(spectrum_yuv)
@@ -100,7 +87,7 @@ def display_image_color_spectrums(image_path):
 
 
 if __name__ == "__main__":
-    # Example: Display an image from the Testset folder
+    # Example: Display an image from the Trainingset folder
     # Change the image number as needed
-    image_path = "Testset/11.jpg"
+    image_path = "Trainingset/7.jpg"
     display_image_color_spectrums(image_path)
