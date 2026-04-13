@@ -102,17 +102,21 @@ def overlay_images(background_path, foreground_path, output_path):
 
 def main():
     # 1. SETUP
-    main_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\7.jpg"
+    main_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\56.jpg"
     template_paths = [
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\Kongekrone.png"]
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_nord.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_mork.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_lys.jpg"
+    ]
 
     # Canny edge detection thresholds for the search image
-    search_thresh1 = 150
-    search_thresh2 = 180
+    search_thresh1 = 160
+    search_thresh2 = 190
 
     # Canny edge detection thresholds for the templates
-    template_thresh1 = 185
-    template_thresh2 = 200
+    template_thresh1 = 120
+    template_thresh2 = 160
 
     img_bgr = cv.imread(main_path)
     if img_bgr is None: raise FileNotFoundError("Image not found")
@@ -128,10 +132,11 @@ def main():
     search_edges = cv.Canny(search_image, search_thresh1, search_thresh2)
     cv.imshow("Search Image Edges", search_edges)
 
-    # Show Canny edges for the first template for comparison
-    if templates and templates[0] is not None:
-        template_edges = cv.Canny(templates[0], template_thresh1, template_thresh2)
-        cv.imshow("Template Edges", template_edges)
+    # Show Canny edges for all templates for comparison
+    for i, template in enumerate(templates):
+        if template is not None:
+            template_edges = cv.Canny(template, template_thresh1, template_thresh2)
+            cv.imshow(f"Template {i+1} Edges", template_edges)
     
     cv.waitKey(0) # Wait for a key press to continue
 

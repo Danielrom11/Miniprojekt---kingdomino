@@ -3,21 +3,45 @@ def get_neighbors(x, y, max_rows=5, max_cols=5):
     Finder gyldige naboer (op, ned, venstre, højre).
     Ingen diagonaler, da reglerne specifikt nævner 'horizontally or vertically'.
     """
-    neighbors = []
-    directions = [
-        (-1, 0),  # op
-        (1, 0),   # ned
-        (0, -1),  # venstre
-        (0, 1)    # højre
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    return [
+        (x + dx, y + dy)
+        for dx, dy in directions
+        if 0 <= x + dx < max_rows and 0 <= y + dy < max_cols
     ]
+
+def _find_cluster(start_x, start_y, tiles, visited, grid_rows, grid_cols, terrain_type):
+    """
+    Finds a single connected terrain cluster using BFS and returns its details.
+    """
+    tiles_to_check = [(start_x, start_y)]
+    visited.add((start_x, start_y))
     
-    for dx, dy in directions:
-        new_x, new_y = x + dx, y + dy
-        # Tjek om naboen er inden for pladens grænser (5x5 grid som standard)
-        if 0 <= new_x < max_rows and 0 <= new_y < max_cols:
-            neighbors.append((new_x, new_y))
-            
-    return neighbors
+    area_tiles_count = 0
+    area_crowns_count = 0
+    cluster_coords = []
+
+    while len(tiles_to_check) > 0:
+        current_x, current_y = tiles_to_check.pop(0)
+        cluster_coords.append((current_x, current_y))
+        
+        area_tiles_count += 1
+        area_crowns_count += tiles[(current_x, current_y)].get("crowns", 0)
+        
+        neighbors = get_neighbors(current_x, current_y, grid_rows, grid_cols)
+        
+        for nx, ny in neighbors:
+            if (nx, ny) not in visited and tiles.get((nx, ny), {}).get("terrain") == terrain_type:
+                visited.add((nx, ny))
+                tiles_to_check.append((nx, ny))
+    
+    return {
+        "terrain": terrain_type,
+        "tiles_count": area_tiles_count,
+        "crowns_count": area_crowns_count,
+        "score": area_tiles_count * area_crowns_count,
+        "coordinates": cluster_coords
+    }
 
 def calculate_score(tiles, grid_rows=5, grid_cols=5):
     """
@@ -31,72 +55,26 @@ def calculate_score(tiles, grid_rows=5, grid_cols=5):
     }
     """
     total_score = 0
-    visited = set() # Holder styr på hvilke felter vi allerede har optalt
-    clusters = []   # Gemmer detaljeret info om hvert fundet område
+    visited = set()
+    clusters = []
     
-    # Gennemgå alle mulige felter på spillepladen (række for række)
     for x in range(grid_rows):
         for y in range(grid_cols):
-            # Spring over, hvis vi allerede har talt dette felt som en del af et område
-            if (x, y) in visited:
-                continue
-            
-            # Tjek om koordinatet overhovedet findes i vores data
-            if (x, y) not in tiles:
+            if (x, y) in visited or (x, y) not in tiles:
                 continue
                 
-            tile_info = tiles[(x, y)]
-            terrain_type = tile_info.get("terrain", "blank")
+            terrain_type = tiles[(x, y)].get("terrain", "blank")
             
-            # Vi ignorerer felter der er "blank" (kategoriseret som tomme pladser)
             if terrain_type.lower() == "blank":
                 visited.add((x, y))
                 continue
             
-            # --- START PÅ ET NYT OMRÅDE (Cluster) ---
-            area_tiles_count = 0
-            area_crowns_count = 0
-            cluster_coords = [] # Vi gemmer alle specifikke felter i dette område
+            # Find a new cluster starting from the current tile
+            cluster_details = _find_cluster(x, y, tiles, visited, grid_rows, grid_cols, terrain_type)
             
-            # Liste (queue) til at holde styr på næste felter vi skal tjekke i dette specifikke område
-            tiles_to_check = [(x, y)]
-            visited.add((x, y)) 
-            
-            # Kør så længe der er ubesøgte felter af samme type i dette område
-            while len(tiles_to_check) > 0:
-                current_x, current_y = tiles_to_check.pop(0)
-                cluster_coords.append((current_x, current_y)) # Gem koordinatet
-                
-                # 1. Læg feltet og dets kroner til områdets total
-                area_tiles_count += 1
-                area_crowns_count += tiles[(current_x, current_y)].get("crowns", 0)
-                
-                # 2. Find naboer og tjek om de skal med i området
-                neighbors = get_neighbors(current_x, current_y, grid_rows, grid_cols)
-                
-                for nx, ny in neighbors:
-                    # Hvis naboen ikke er besøgt endnu og findes i vores plade
-                    if (nx, ny) not in visited and (nx, ny) in tiles:
-                        neighbor_terrain = tiles[(nx, ny)].get("terrain", "blank")
-                        
-                        # Hvis naboen har samme terræntype, tilhører den dette område
-                        if neighbor_terrain == terrain_type:
-                            visited.add((nx, ny))          # Markér som besøgt
-                            tiles_to_check.append((nx, ny)) # Sæt i køen til at blive tjekket for dens egne naboer
-            
-            # --- OMRÅDET ER OPGJORT ---
-            # Udregn point for området (antal sammenhængende felter * antal kroner)
-            area_score = area_tiles_count * area_crowns_count
-            total_score += area_score
-            
-            # Gem alle detaljerne ned i vores journal, hvis det altså er et rigtigt område
-            clusters.append({
-                "terrain": terrain_type,
-                "tiles_count": area_tiles_count,
-                "crowns_count": area_crowns_count,
-                "score": area_score,
-                "coordinates": cluster_coords
-            })
+            if cluster_details:
+                total_score += cluster_details["score"]
+                clusters.append(cluster_details)
             
     return total_score, clusters
 

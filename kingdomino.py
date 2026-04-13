@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
 from point_calculator import calculate_score
-
+# Koden laver fejl ift crown detection lige nu, jeg er ikke sikker på hvorfor. Måske noget med
+# den sorte kasse i midten, der skal ogsp tilføjes template thresholds seperat til de to simple templates
+# evt skal der kigges på hvordan den gemmer crowns ift crowns_detection_code. Er det måske en bedre måde for template matching at give crown videre på til canny?
 # Main function containing the backbone of the program
 def main():
     print("+-------------------------------+")
@@ -20,24 +20,35 @@ def main():
     # Pre-load crown templates
     template_paths = [
         r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_nord.jpg",
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.png"
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_mork.jpg",
+        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_lys.jpg"
     ]
     crown_templates = [cv.imread(path, cv.IMREAD_GRAYSCALE) for path in template_paths]
 
     # Canny edge detection thresholds
-    search_thresh1 = 150
-    search_thresh2 = 180
-    template_thresh1 = 185
-    template_thresh2 = 200
+    search_thresh1 = 160
+    search_thresh2 = 190
+    template_thresh1 = 120
+    template_thresh2 = 160
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\7.jpg"
+    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\56.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
 
     image = cv.imread(image_path)
     tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
-    print(len(tiles))
+    
+    # Kør pointberegneren på den genererede tiles dict!
+    final_score, clusters = calculate_score(tiles)
+    
+    # Print all results
+    print_results(tiles, final_score, clusters)
+
+def print_results(tiles, final_score, clusters):
+    """Prints the final results, including tile details, total score, and cluster breakdown."""
+    print("\n======== TILE DETALJER ========")
     # Sort the tiles by their (y, x) coordinates before printing
     for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
         print(f"Tile ({x}, {y}):")
@@ -45,8 +56,6 @@ def main():
         print(f"  Crowns: {tile_data['crowns']}")
         print("=====")
 
-     # Kør pointberegneren på den genererede tiles dict!
-    final_score, clusters = calculate_score(tiles)
     print(f"\n======== RESULTAT ========")
     print(f"Billedets samlede score: {final_score}")
     print(f"==========================\n")
@@ -57,14 +66,7 @@ def main():
         print(f"  Felter i alt: {cluster['tiles_count']}, Kroner i alt: {cluster['crowns_count']} => {cluster['score']} Point")
         print(f"  Består af koordinaterne: {cluster['coordinates']}")
         print("---------------------------------------")
-    print("=====================================\n")
-    
-    # Sort the tiles by their (y, x) coordinates before printing
-    for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
-        print(f"Tile ({x}, {y}):")
-        print(f"  Predicted Terrain: {tile_data['terrain']}")
-        print(f"  Crowns: {tile_data['crowns']}")
-        print("=====")
+    print("=====================================\n============================\n")
 
 def train_model():
     # Load the training data
@@ -105,15 +107,17 @@ def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search
                 terrain_features = get_terrain(tile)
                 predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
                 
-                crown_crop_img = crop_tile_center(tile)
-                num_crowns = detect_crowns(crown_crop_img, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
-
+                # Use the uncropped (full 100x100) tile to avoid Canny edge artifacts from black masking
+                full_tile_blue = cv.split(tile)[0]
+                crown_rects = detect_crowns(full_tile_blue, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
+                
+                # We can store the full tile instead of the cropped tile, since crop just interferes with Canny here
                 tiles[(x_coord, y_coord)] = {
                     "tile": tile,
-                    "crown_crop": crown_crop_img,
+                    "crown_crop": full_tile_blue,
                     "terrain_features": terrain_features,
                     "terrain": predicted_terrain,
-                    "crowns": num_crowns,
+                    "crowns": len(crown_rects),
                 }
             except Exception as e:
                 print(f"An unexpected error occurred processing tile ({x_coord}, {y_coord}): {e}")
@@ -258,7 +262,7 @@ def detect_crowns(search_image, templates, search_thresh1, search_thresh2, templ
     # Group the confirmed rectangles to merge overlapping boxes
     rects, _ = cv.groupRectangles(confirmed_rects, groupThreshold=1, eps=0.5)
     
-    return len(rects)
+    return rects
 
 
 if __name__ == "__main__":

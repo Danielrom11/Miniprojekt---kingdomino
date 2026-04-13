@@ -89,5 +89,5 @@ def display_image_color_spectrums(image_path):
 if __name__ == "__main__":
     # Example: Display an image from the Trainingset folder
     # Change the image number as needed
-    image_path = "Trainingset/7.jpg"
+    image_path = "Trainingset/18.jpg"
     display_image_color_spectrums(image_path)
