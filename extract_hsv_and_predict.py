@@ -1,0 +1,168 @@
+import cv2 as cv
+import numpy as np
+import os
+import pandas as pd
+from sklearn.neighbors import KNeighborsClassifier
+from pathlib import Path
+
+# Load the trained KNN model
+df = pd.read_csv(r'C:\Users\danie\Desktop\python_work\P0---gruppe-4\data_KD.csv', sep=';')
+df.dropna(subset=['h', 's', 'v', 'target'], inplace=True)
+
+X = df[['h', 's', 'v']].values
+y = df['target'].values
+
+k = 11
+knn_classifier = KNeighborsClassifier(n_neighbors=k)
+knn_classifier.fit(X, y)
+
+# Path to training set
+training_set_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino\Trainingset"
+
+# List to store all data
+all_data = []
+
+def get_tiles(image):
+    """Split image into 5x5 tiles (100x100 pixels each)"""
+    tiles = []
+    for y in range(5):
+        tiles.append([])
+        for x in range(5):
+            tiles[-1].append(image[y*100:(y+1)*100, x*100:(x+1)*100])
+    return tiles
+
+def create_hsv_histogram(tile, bin_size=10):
+    """Create HSV histogram with bins of given size"""
+    hsv_tile = cv.cvtColor(tile, cv.COLOR_BGR2HSV)
+    
+    # Extract H, S, V channels
+    h_channel = hsv_tile[:, :, 0].flatten()
+    s_channel = hsv_tile[:, :, 1].flatten()
+    v_channel = hsv_tile[:, :, 2].flatten()
+    
+    # Create histogram bins
+    # H ranges 0-180, S and V range 0-255 in OpenCV
+    h_bins = np.arange(0, 190, bin_size)  # 0-180 with 10px intervals = 18 bins
+    s_bins = np.arange(0, 260, bin_size)  # 0-255 with 10px intervals = 26 bins
+    v_bins = np.arange(0, 260, bin_size)  # 0-255 with 10px intervals = 26 bins
+    
+    h_hist, _ = np.histogram(h_channel, bins=h_bins)
+    s_hist, _ = np.histogram(s_channel, bins=s_bins)
+    v_hist, _ = np.histogram(v_channel, bins=v_bins)
+    
+    return h_hist, s_hist, v_hist
+
+def process_training_set():
+    """Process all images in training set and extract HSV values"""
+    
+    # Get all jpg files sorted numerically
+    jpg_files = sorted([f for f in os.listdir(training_set_path) if f.endswith('.jpg')],
+                       key=lambda x: int(x.replace('.jpg', '')))
+    
+    print(f"Found {len(jpg_files)} images in training set")
+    
+    for image_file in jpg_files:
+        image_path = os.path.join(training_set_path, image_file)
+        
+        try:
+            image = cv.imread(image_path)
+            if image is None:
+                print(f"Warning: Could not read {image_file}")
+                continue
+            
+            tiles = get_tiles(image)
+            
+            # Process each tile in the 5x5 grid
+            for y, row in enumerate(tiles):
+                for x, tile in enumerate(row):
+                    # Convert to HSV and create histogram
+                    hsv_tile = cv.cvtColor(tile, cv.COLOR_BGR2HSV)
+                    
+                    # Get histogram bins
+                    h_hist, s_hist, v_hist = create_hsv_histogram(tile, bin_size=10)
+                    
+                    # Get median HSV values for KNN prediction
+                    hue, saturation, value = np.median(hsv_tile, axis=(0, 1))
+                    
+                    # Predict terrain type using KNN
+                    features = np.array([[hue, saturation, value]])
+                    prediction = knn_classifier.predict(features)[0]
+                    
+                    # Create reference format: (NUMBER.JPG_X,Y)
+                    reference = f"({image_file}_{x},{y})"
+                    
+                    # Create a row entry with all histogram bins
+                    row_data = {
+                        'Reference': reference,
+                        'Image': image_file,
+                        'Tile_X': x,
+                        'Tile_Y': y,
+                        'H_Median': round(hue, 2),
+                        'S_Median': round(saturation, 2),
+                        'V_Median': round(value, 2),
+                        'Predicted_Terrain': prediction,
+                        'Manual_Label': ''  # Empty column for manual labeling
+                    }
+                    
+                    # Add H histogram bins (18 bins for 0-180 with 10px intervals)
+                    for i, h_count in enumerate(h_hist):
+                        bin_range = i * 10
+                        row_data[f'H_Bin_{bin_range}-{bin_range+10}'] = int(h_count)
+                    
+                    # Add S histogram bins (25 bins for 0-255 with 10px intervals)
+                    for i, s_count in enumerate(s_hist):
+                        bin_range = i * 10
+                        bin_end = bin_range + 10 if i < len(s_hist) - 1 else 255
+                        row_data[f'S_Bin_{bin_range}-{bin_end}'] = int(s_count)
+                    
+                    # Add V histogram bins (25 bins for 0-255 with 10px intervals)
+                    for i, v_count in enumerate(v_hist):
+                        bin_range = i * 10
+                        bin_end = bin_range + 10 if i < len(v_hist) - 1 else 255
+                        row_data[f'V_Bin_{bin_range}-{bin_end}'] = int(v_count)
+                    
+                    # Add to data list
+                    all_data.append(row_data)
+            
+            print(f"Processed: {image_file}")
+            
+        except Exception as e:
+            print(f"Error processing {image_file}: {str(e)}")
+    
+    return all_data
+
+def save_to_excel(data, output_path):
+    """Save extracted data to Excel file"""
+    if not data:
+        print("No data to save!")
+        return
+    
+    df = pd.DataFrame(data)
+    df.to_excel(output_path, sheet_name='Training_Data', index=False)
+    print(f"\nData saved to: {output_path}")
+    print(f"Total tiles processed: {len(df)}")
+    print(f"\nColumn structure:")
+    for col in df.columns:
+        print(f"  - {col}")
+
+def main():
+    print("=" * 60)
+    print("HSV Extraction and KNN Prediction for Kingdomino Tiles")
+    print("=" * 60)
+    
+    # Process training set
+    print("\nProcessing training set...")
+    data = process_training_set()
+    
+    # Save to Excel
+    output_file = r"C:\Users\danie\Desktop\python_work\P0---gruppe-4\kingdomino_tiles_hsv_histogram.xlsx"
+    print("\nSaving to Excel...")
+    save_to_excel(data, output_file)
+    
+    print("\n" + "=" * 60)
+    print("Process complete!")
+    print("You can now manually label each tile in the 'Manual_Label' column")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
