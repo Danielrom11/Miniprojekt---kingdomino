@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Node / Expo
+app/node_modules/
+app/.expo/
+app/dist/
+app/web-build/
+app/.env
+
+# Backend virtualenv
+backend/venv/
+backend/.venv/

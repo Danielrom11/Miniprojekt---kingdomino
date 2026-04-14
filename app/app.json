@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "King Domino",
+    "slug": "kingdomino-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/hero.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/hero.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Appen bruger kameraet til at fotografere dit King Domino-bræt.",
+        "NSPhotoLibraryUsageDescription": "Appen kan hente billeder fra dit fotobibliotek."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/hero.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    }
+  }
+}

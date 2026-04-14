@@ -5,6 +5,10 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from point_calculator import calculate_score
+
+# Base directory for paths relative to this file
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Koden laver fejl ift crown detection lige nu, jeg er ikke sikker på hvorfor. Måske noget med
 # den sorte kasse i midten, der skal ogsp tilføjes template thresholds seperat til de to simple templates
 # evt skal der kigges på hvordan den gemmer crowns ift crowns_detection_code. Er det måske en bedre måde for template matching at give crown videre på til canny?
@@ -24,6 +28,17 @@ def load_and_prepare_template(path):
     img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
     return img_hsv, img_hsv_gray
 
+def build_crown_templates():
+    """Builds and returns the list of crown templates using relative paths."""
+    features_dir = os.path.join(_BASE_DIR, "features")
+    return [
+        (*load_and_prepare_template(os.path.join(features_dir, "krone_blaa_baggrund_hr.JPG")), 180, 210, 0.7, 0.15),
+        (*load_and_prepare_template(os.path.join(features_dir, "krone_blaa_baggrund_lr.JPG")), 130, 150, 0.7, 0.15),
+        (*load_and_prepare_template(os.path.join(features_dir, "krone_sort_baggrund_hr.JPG")), 140, 180, 0.6, 0.15),
+        (*load_and_prepare_template(os.path.join(features_dir, "krone_sort_baggrund_lr.JPG")), 80, 110, 0.6, 0.15),
+        (*load_and_prepare_template(os.path.join(features_dir, "krone_sort_baggrund.JPG")), 140, 180, 0.6, 0.15),
+    ]
+
 # Main function containing the backbone of the program
 def main():
     print("+-------------------------------+")
@@ -35,19 +50,13 @@ def main():
 
     # Pre-load crown templates with their specific thresholds
     # Format: (img_hsv, img_v, template_thresh1, template_thresh2, match_threshold, edge_sim_threshold)
-    crown_templates = [
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_hr.jpg"), 180, 210, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_lr.jpg"), 130, 150, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_hr.jpg"), 140, 180, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_lr.jpg"), 80, 110, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund.jpg"), 140, 180, 0.6, 0.15)
-    ]
+    crown_templates = build_crown_templates()
 
     # Canny edge detection thresholds for the search image
     search_thresh1 = 200
     search_thresh2 = 220
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\3.jpg"
+    image_path = os.path.join(_BASE_DIR, "Trainingset", "3.jpg")
     if not os.path.isfile(image_path):
         print("Image not found")
         return
@@ -85,7 +94,7 @@ def print_results(tiles, final_score, clusters):
 
 def train_model():
     # Load the training data
-    training_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    training_path = os.path.join(_BASE_DIR, "Trainingset", "kingdomino_tiles_hsv_histogram_kopi.xlsx")
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 
