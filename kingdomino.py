@@ -8,6 +8,22 @@ from point_calculator import calculate_score
 # Koden laver fejl ift crown detection lige nu, jeg er ikke sikker på hvorfor. Måske noget med
 # den sorte kasse i midten, der skal ogsp tilføjes template thresholds seperat til de to simple templates
 # evt skal der kigges på hvordan den gemmer crowns ift crowns_detection_code. Er det måske en bedre måde for template matching at give crown videre på til canny?
+def load_and_prepare_template(path):
+    """
+    Loads a color template, converts to HSV, and returns both the full HSV and the HSV grayscale.
+    """
+    img_bgr = cv.imread(path, cv.IMREAD_COLOR)
+    if img_bgr is None:
+        print(f"Warning: Could not load template at {path}")
+        return None, None
+    
+    # Convert the image to HSV color space
+    img_hsv = cv.cvtColor(img_bgr, cv.COLOR_BGR2HSV)
+    
+    # Create a grayscale representation of the raw HSV matrix for Canny edges
+    img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
+    return img_hsv, img_hsv_gray
+
 # Main function containing the backbone of the program
 def main():
     print("+-------------------------------+")
@@ -17,28 +33,27 @@ def main():
     # Train the Random Forest model
     model, feature_cols, label_encoder = train_model()
 
-    # Pre-load crown templates
-    template_paths = [
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_nord.jpg",
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_syd.jpg",
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_mork.jpg",
-        r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\kongekrone_simpel_lys.jpg"
+    # Pre-load crown templates with their specific thresholds
+    # Format: (img_hsv, img_v, template_thresh1, template_thresh2, match_threshold, edge_sim_threshold)
+    crown_templates = [
+        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_hr.jpg"), 180, 210, 0.7, 0.15),
+        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_lr.jpg"), 130, 150, 0.7, 0.15),
+        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_hr.jpg"), 140, 180, 0.6, 0.15),
+        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_lr.jpg"), 80, 110, 0.6, 0.15),
+        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund.jpg"), 140, 180, 0.6, 0.15)
     ]
-    crown_templates = [cv.imread(path, cv.IMREAD_GRAYSCALE) for path in template_paths]
 
-    # Canny edge detection thresholds
-    search_thresh1 = 160
-    search_thresh2 = 190
-    template_thresh1 = 120
-    template_thresh2 = 160
+    # Canny edge detection thresholds for the search image
+    search_thresh1 = 200
+    search_thresh2 = 220
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\56.jpg"
+    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\3.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
 
     image = cv.imread(image_path)
-    tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
+    tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2)
     
     # Kør pointberegneren på den genererede tiles dict!
     final_score, clusters = calculate_score(tiles)
@@ -98,43 +113,47 @@ def train_model():
     return model, feature_cols, label_encoder
 
 # Break a board into tiles
-def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2):
+def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2):
     tiles = {}
+    
+    # 1. Detect ALL crowns on the full image first to avoid boundary cut-offs
+    img_hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+    img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
+    
+    search_image_match = img_hsv
+    search_image_edges = img_hsv_gray
+    
+    all_crown_rects = detect_crowns(search_image_match, search_image_edges, crown_templates, search_thresh1, search_thresh2)
+    
     for y_coord in range(5):
         for x_coord in range(5):
             try:
-                tile = image[y_coord * 100 : (y_coord + 1) * 100, x_coord * 100 : (x_coord + 1) * 100]
+                tile_x_start = x_coord * 100
+                tile_y_start = y_coord * 100
+                tile_x_end = (x_coord + 1) * 100
+                tile_y_end = (y_coord + 1) * 100
+                
+                tile = image[tile_y_start:tile_y_end, tile_x_start:tile_x_end]
                 terrain_features = get_terrain(tile)
                 predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
                 
-                # Use the uncropped (full 100x100) tile to avoid Canny edge artifacts from black masking
-                full_tile_blue = cv.split(tile)[0]
-                crown_rects = detect_crowns(full_tile_blue, crown_templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2)
+                # 2. Check which crowns belong to this specific tile based on their center coordinates
+                tile_crowns_count = 0
+                for (cx, cy, cw, ch) in all_crown_rects:
+                    center_x = cx + cw // 2
+                    center_y = cy + ch // 2
+                    if tile_x_start <= center_x < tile_x_end and tile_y_start <= center_y < tile_y_end:
+                        tile_crowns_count += 1
                 
-                # We can store the full tile instead of the cropped tile, since crop just interferes with Canny here
                 tiles[(x_coord, y_coord)] = {
                     "tile": tile,
-                    "crown_crop": full_tile_blue,
                     "terrain_features": terrain_features,
                     "terrain": predicted_terrain,
-                    "crowns": len(crown_rects),
+                    "crowns": tile_crowns_count,
                 }
             except Exception as e:
                 print(f"An unexpected error occurred processing tile ({x_coord}, {y_coord}): {e}")
     return tiles
-
-def crop_tile_center(tile, box_size=30):
-    tile_height, tile_width = tile.shape[:2]
-    hole_height = min(tile_height, max(1, int(box_size)))
-    hole_width = min(tile_width, max(1, int(box_size)))
-    start_y = (tile_height - hole_height) // 2
-    start_x = (tile_width - hole_width) // 2
-
-    masked_tile = tile.copy()
-    masked_tile[start_y : start_y + hole_height, start_x : start_x + hole_width] = 0
-    
-    # Return only the blue channel of the masked tile
-    return cv.split(masked_tile)[0]
 
 # Determine the type of terrain in a tile
 def get_terrain(tile, bin_size=10):
@@ -194,59 +213,63 @@ def predict_terrain(terrain_features, model, feature_cols, label_encoder):
     prediction = label_encoder.inverse_transform(prediction_encoded)
     return prediction[0]
 
-def detect_crowns(search_image, templates, search_thresh1, search_thresh2, template_thresh1, template_thresh2):
+def detect_crowns(search_image_match, search_image_edges, templates_with_thresholds, search_thresh1, search_thresh2):
     """
     Detects crowns using template matching and verifies with Canny edge comparison.
     """
     potential_matches = []
-    template_matching_threshold = 0.7  # Initial threshold for finding potential crowns
 
     # --- Step 1: Initial Template Matching ---
-    for original_template in templates:
-        if original_template is None:
+    for template_data in templates_with_thresholds:
+        template_hsv, template_hsv_gray, t_thresh1, t_thresh2, match_thresh, edge_sim_thresh = template_data
+        if template_hsv is None:
             continue
 
-        for scale in np.linspace(0.8, 0.2, 25):
-            resized_w = int(original_template.shape[1] * scale)
-            resized_h = int(original_template.shape[0] * scale)
+        for scale in np.linspace(1.15, 0.95, 5):
+            resized_w = int(template_hsv.shape[1] * scale)
+            resized_h = int(template_hsv.shape[0] * scale)
             if resized_w < 15 or resized_h < 15:
                 continue
             
-            resized_t = cv.resize(original_template, (resized_w, resized_h))
+            resized_t_hsv = cv.resize(template_hsv, (resized_w, resized_h))
+            resized_t_gray = cv.resize(template_hsv_gray, (resized_w, resized_h))
             
             for angle in [0, 90, 180, 270]:
                 if angle == 0:
-                    curr_t = resized_t
+                    curr_t_hsv = resized_t_hsv
+                    curr_t_gray = resized_t_gray
                 elif angle == 90:
-                    curr_t = cv.rotate(resized_t, cv.ROTATE_90_CLOCKWISE)
+                    curr_t_hsv = cv.rotate(resized_t_hsv, cv.ROTATE_90_CLOCKWISE)
+                    curr_t_gray = cv.rotate(resized_t_gray, cv.ROTATE_90_CLOCKWISE)
                 elif angle == 180:
-                    curr_t = cv.rotate(resized_t, cv.ROTATE_180)
+                    curr_t_hsv = cv.rotate(resized_t_hsv, cv.ROTATE_180)
+                    curr_t_gray = cv.rotate(resized_t_gray, cv.ROTATE_180)
                 elif angle == 270:
-                    curr_t = cv.rotate(resized_t, cv.ROTATE_90_COUNTERCLOCKWISE)
+                    curr_t_hsv = cv.rotate(resized_t_hsv, cv.ROTATE_90_COUNTERCLOCKWISE)
+                    curr_t_gray = cv.rotate(resized_t_gray, cv.ROTATE_90_COUNTERCLOCKWISE)
                 
-                # Match on the original grayscale images
-                res = cv.matchTemplate(search_image, curr_t, cv.TM_CCOEFF_NORMED)
-                loc = np.where(res >= template_matching_threshold)
+                # Match on the HSV images
+                res = cv.matchTemplate(search_image_match, curr_t_hsv, cv.TM_CCOEFF_NORMED)
+                loc = np.where(res >= match_thresh)
                 
-                h, w = curr_t.shape
+                h, w = curr_t_gray.shape[:2]
                 for pt in zip(*loc[::-1]):
-                    # Store the potential match rectangle and the template used
-                    potential_matches.append(([int(pt[0]), int(pt[1]), int(w), int(h)], curr_t))
+                    # Store the potential match rectangle, the *gray* template used, and its specific thresholds
+                    potential_matches.append(([int(pt[0]), int(pt[1]), int(w), int(h)], curr_t_gray, t_thresh1, t_thresh2, edge_sim_thresh))
 
     # --- Step 2: Verification with Canny Edge Matching ---
     confirmed_rects = []
-    edge_similarity_threshold = 0.15  # Threshold for the edge comparison step
 
-    search_edges = cv.Canny(search_image, search_thresh1, search_thresh2)
+    search_edges = cv.Canny(search_image_edges, search_thresh1, search_thresh2)
 
-    for rect, template in potential_matches:
+    for rect, template_gray, t_thresh1, t_thresh2, edge_sim_thresh in potential_matches:
         x, y, w, h = rect
         
         # Get the region of interest (ROI) from the search image's edges
         roi_edges = search_edges[y:y+h, x:x+w]
         
         # Get the edges of the template that made the match
-        template_edges = cv.Canny(template, template_thresh1, template_thresh2)
+        template_edges = cv.Canny(template_gray, t_thresh1, t_thresh2)
         
         # Ensure template_edges is not larger than roi_edges
         if template_edges.shape[0] > roi_edges.shape[0] or template_edges.shape[1] > roi_edges.shape[1]:
@@ -256,7 +279,7 @@ def detect_crowns(search_image, templates, search_thresh1, search_thresh2, templ
         edge_res = cv.matchTemplate(roi_edges, template_edges, cv.TM_CCOEFF_NORMED)
         
         # If the edges are a good match, confirm the detection
-        if np.max(edge_res) >= edge_similarity_threshold:
+        if np.max(edge_res) >= edge_sim_thresh:
             confirmed_rects.append(rect)
 
     # Group the confirmed rectangles to merge overlapping boxes
