@@ -207,20 +207,18 @@ def detect_crowns_debug(
             confirmed_rects.append(rect)
 
     if potential_matches:
-        raw_rectangles = [match[0] for match in potential_matches]
-        raw_grouped, _ = cv.groupRectangles(raw_rectangles, groupThreshold=1, eps=0.5)
-        if len(raw_grouped) == 0:
-            raw_grouped = np.array(raw_rectangles, dtype=np.int32)
+        # Bevidst før grouping, så debug-figuren tydeligt viser hvorfor efterfiltrering er nødvendig
+        raw_candidates = np.array([match[0] for match in potential_matches], dtype=np.int32)
     else:
-        raw_grouped = np.empty((0, 4), dtype=np.int32)
+        raw_candidates = np.empty((0, 4), dtype=np.int32)
 
     if not confirmed_rects:
-        return raw_grouped, np.empty((0, 4), dtype=np.int32)
+        return raw_candidates, np.empty((0, 4), dtype=np.int32)
 
     verified_grouped, _ = cv.groupRectangles(confirmed_rects, groupThreshold=1, eps=0.5)
     if len(verified_grouped) == 0:
         verified_grouped = np.array(confirmed_rects, dtype=np.int32)
-    return raw_grouped, verified_grouped
+    return raw_candidates, verified_grouped
 
 
 def build_tiles(image: np.ndarray, model: RandomForestClassifier, feature_cols: list[str], label_encoder: LabelEncoder, templates: list[tuple[np.ndarray, np.ndarray, int, int, float, float]]) -> dict[tuple[int, int], dict]:
@@ -291,7 +289,13 @@ def draw_architecture_diagram() -> None:
     plt.close(fig)
 
 
-def draw_feature_visualization(sample_image: np.ndarray, model: RandomForestClassifier, feature_cols: list[str], label_encoder: LabelEncoder) -> None:
+def draw_feature_visualization(
+    sample_image: np.ndarray,
+    model: RandomForestClassifier,
+    feature_cols: list[str],
+    label_encoder: LabelEncoder,
+    templates: list[tuple[np.ndarray, np.ndarray, int, int, float, float]],
+) -> None:
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
     axes[0].imshow(cv.cvtColor(sample_image, cv.COLOR_BGR2RGB))
@@ -304,8 +308,22 @@ def draw_feature_visualization(sample_image: np.ndarray, model: RandomForestClas
         for x in range(5):
             axes[0].text(x * 100 + 5, y * 100 + 15, f"({x},{y})", color="white", fontsize=8, bbox=dict(facecolor="black", alpha=0.3, pad=1))
 
-    # Samme felt vises i både HSV- og Canny-visualisering
-    tile_x, tile_y = 2, 2
+    # Vælg helst et felt med krone, så featurefiguren bliver mere informativ
+    image_hsv = cv.cvtColor(sample_image, cv.COLOR_BGR2HSV)
+    image_hsv_gray = cv.cvtColor(image_hsv, cv.COLOR_BGR2GRAY)
+    all_rects = detect_crowns(image_hsv, image_hsv_gray, templates)
+    crowns_per_tile: dict[tuple[int, int], int] = {}
+    for x, y, w, h in all_rects:
+        cx = x + w // 2
+        cy = y + h // 2
+        tile_coord = (cx // 100, cy // 100)
+        crowns_per_tile[tile_coord] = crowns_per_tile.get(tile_coord, 0) + 1
+
+    if crowns_per_tile:
+        tile_x, tile_y = max(crowns_per_tile.items(), key=lambda item: item[1])[0]
+    else:
+        tile_x, tile_y = 2, 2
+
     tile = sample_image[tile_y * 100 : (tile_y + 1) * 100, tile_x * 100 : (tile_x + 1) * 100]
     hsv_tile = cv.cvtColor(tile, cv.COLOR_BGR2HSV)
     h_channel = hsv_tile[:, :, 0].flatten()
@@ -324,7 +342,8 @@ def draw_feature_visualization(sample_image: np.ndarray, model: RandomForestClas
     hsv_edges = cv.Canny(hsv_gray, 200, 220)
     axes[2].imshow(hsv_gray, cmap="gray")
     axes[2].imshow(hsv_edges, cmap="autumn", alpha=0.45)
-    axes[2].set_title("HSV-gray + Canny\n(brugt til krone-detektion)")
+    crown_note = crowns_per_tile.get((tile_x, tile_y), 0)
+    axes[2].set_title(f"HSV-gray + Canny\n(felt ({tile_x},{tile_y}), kroner: {crown_note})")
     axes[2].axis("off")
 
     fig.tight_layout()
@@ -365,38 +384,31 @@ def draw_crown_visualization(sample_image: np.ndarray, templates: list[tuple[np.
     return {}
 
 
-def draw_template_debug_comparison(sample_image: np.ndarray, templates: list[tuple[np.ndarray, np.ndarray, int, int, float, float]]) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
-    for ax in axes:
-        ax.imshow(cv.cvtColor(sample_image, cv.COLOR_BGR2RGB))
-        ax.axis("off")
-        for i in range(6):
-            ax.axhline(i * 100, color="white", lw=1, alpha=0.6)
-            ax.axvline(i * 100, color="white", lw=1, alpha=0.6)
+def draw_template_reference_figure() -> None:
+    template_path = BASE_DIR / "features" / "kongekrone_nord.jpg"
+    template_bgr = cv.imread(str(template_path), cv.IMREAD_COLOR)
+    if template_bgr is None:
+        return
 
-    image_hsv = cv.cvtColor(sample_image, cv.COLOR_BGR2HSV)
-    image_hsv_gray = cv.cvtColor(image_hsv, cv.COLOR_BGR2GRAY)
-    raw_rects, verified_rects = detect_crowns_debug(image_hsv, image_hsv_gray, templates)
+    template_hsv = cv.cvtColor(template_bgr, cv.COLOR_BGR2HSV)
+    template_hsv_gray = cv.cvtColor(template_hsv, cv.COLOR_BGR2GRAY)
+    template_edges = cv.Canny(template_hsv_gray, 140, 180)
 
-    for rect in raw_rects:
-        x, y, w, h = rect
-        axes[0].add_patch(
-            plt.Rectangle((x, y), w, h, fill=False, ec="#ff4d4d", lw=1.2)
-        )
-    for rect in verified_rects:
-        x, y, w, h = rect
-        axes[1].add_patch(
-            plt.Rectangle((x, y), w, h, fill=False, ec="#00ff84", lw=1.8)
-        )
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
+    axes[0].imshow(cv.cvtColor(template_bgr, cv.COLOR_BGR2RGB))
+    axes[0].set_title("Template (RGB)")
+    axes[0].axis("off")
 
-    raw_count = len(raw_rects)
-    verified_count = len(verified_rects)
+    axes[1].imshow(template_hsv_gray, cmap="gray")
+    axes[1].set_title("Template i HSV-gray")
+    axes[1].axis("off")
 
-    axes[0].set_title(f"Rå template matches (efter gruppering): {raw_count}")
-    axes[1].set_title(f"Efter Canny-verifikation: {verified_count}")
+    axes[2].imshow(template_edges, cmap="gray")
+    axes[2].set_title("Canny-kanter på template")
+    axes[2].axis("off")
 
     fig.tight_layout()
-    fig.savefig(FIGURE_DIR / "template_matching_debug.png", dpi=220, bbox_inches="tight")
+    fig.savefig(FIGURE_DIR / "template_reference.png", dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -439,10 +451,10 @@ def main() -> None:
         raise FileNotFoundError(f"Could not read sample image: {sample_image_path}")
 
     draw_architecture_diagram()
-    draw_feature_visualization(sample_image, model, feature_cols, label_encoder)
+    draw_feature_visualization(sample_image, model, feature_cols, label_encoder, templates)
     tiles = build_tiles(sample_image, model, feature_cols, label_encoder, templates)
     draw_crown_visualization(sample_image, templates)
-    draw_template_debug_comparison(sample_image, templates)
+    draw_template_reference_figure()
     total_score, clusters = calculate_score(tiles)
     draw_cluster_visualization(tiles, clusters)
     print(f"Saved figures to {FIGURE_DIR}")

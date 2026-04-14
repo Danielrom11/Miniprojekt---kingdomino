@@ -39,11 +39,11 @@ Dernæst trækkes der histogramegenskaber, hvor farvernes fordeling inddeles i i
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.95\textwidth]{figures/grid_feature_visualization.png}
-    \caption{Et eksempel på en spilleplade opdelt i $5 \times 5$ grid, samt visualisering af både HSV-features (terrænklassificering) og HSV-gray/Canny-features (krone-detektion) fra et enkelt felt.}
+    \caption{Et eksempel på en spilleplade opdelt i $5 \times 5$ grid, samt visualisering af både HSV-features (terrænklassificering) og HSV-gray/Canny-features (krone-detektion) fra et felt med krone.}
     \label{fig:grid_extraction}
 \end{figure}
 
-Figur~\ref{fig:grid_extraction} viser, at systemet bruger forskellige feature-repræsentationer til forskellige delopgaver: HSV-histogrammer til terrænklassificering og en HSV-baseret gråtoneprojektion med Canny-kanter til krone-detektion. Formålet er at vælge den repræsentation, der bedst understøtter den konkrete beslutning i hvert modul.
+Figur~\ref{fig:grid_extraction} viser, at systemet bruger forskellige feature-repræsentationer til forskellige delopgaver: HSV-histogrammer til terrænklassificering og en HSV-baseret gråtoneprojektion med Canny-kanter til krone-detektion. Figuren er bevidst taget fra et felt, hvor der faktisk findes en krone, så sammenhængen mellem feature-repræsentation og objektlokalisering fremstår tydeligt.
 
 \subsection{Machine Learning: Terrænklassificering}
 Til klassificeringen af de seks generiske terræntyper samt den farveløse \texttt{blank}-type fungerer en \textit{Random Forest Classifier} model som grundsten. Modellen er trænet på manuelle annotationer i tilhørende træningssæt via \texttt{LabelEncoder}, som tillader algoritmen at arbejde kvantitativt med tekst-strenge.
@@ -67,16 +67,16 @@ Resultater samles af algoritmen via \texttt{cv.groupRectangles}, hvilket konsoli
     \label{fig:templatematching}
 \end{figure}
 
-I Figur~\ref{fig:templatematching} vises de endelige detektioner efter filtrering. Figuren skal læses sammen med den efterfølgende debug-figur, hvor forskellen mellem rå matches og verificerede matches tydeliggøres.
+I Figur~\ref{fig:templatematching} vises de endelige detektioner på pladen efter hele krone-pipelinen. Da den aktuelle model finder kroner stabilt på dette eksempel, giver en rå-vs-verificeret sammenligning begrænset ekstra information i netop dette tilfælde.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{figures/template_matching_debug.png}
-    \caption{Side-by-side sammenligning af rå template matches (venstre) og matches efter Canny-verifikation (højre). Figuren forklarer, hvorfor nogle kandidater filtreres væk i den endelige kroneoptælling.}
-    \label{fig:templatematching_debug}
+    \includegraphics[width=0.82\textwidth]{figures/template_reference.png}
+    \caption{Visualisering af en anvendt krone-template: original template, HSV-gray repræsentation og Canny-kanter. Figuren viser de billedrepræsentationer, som matcher- og verifikationsleddet baserer sig på.}
+    \label{fig:template_reference}
 \end{figure}
 
-Figur~\ref{fig:templatematching_debug} fungerer som metodevalidering: venstre panel viser alle kandidater fundet af template matching-trinnet, mens højre panel viser de kandidater, der overlever konturkontrollen. Dermed dokumenteres det, at manglende kroner i output ikke er en visualiseringsfejl, men en konsekvens af de valgte tærskler og verifikationskrav.
+Figur~\ref{fig:template_reference} forklarer den tekniske mekanik i kronedetektionen og supplerer det overordnede detektionsresultat i Figur~\ref{fig:templatematching}. Kombinationen giver både et output-orienteret og et metode-orienteret billede af samme pipeline.
 
 \subsection{Algoritmik: Pointberegnings logik}
 Sidste trin af opgaven varetages af det specialudviklede Point Calculator modul, hvilket evaluerer hele spillepladens $5 \times 5$ grid i samklang. Modulets funktion er at bygge \textit{clusters}, hvor identiske og tilstødende terræntyper grupperes i henhold til spillets love.
