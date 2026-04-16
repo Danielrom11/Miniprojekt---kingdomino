@@ -5,9 +5,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from point_calculator import calculate_score
-# Koden laver fejl ift crown detection lige nu, jeg er ikke sikker på hvorfor. Måske noget med
-# den sorte kasse i midten, der skal ogsp tilføjes template thresholds seperat til de to simple templates
-# evt skal der kigges på hvordan den gemmer crowns ift crowns_detection_code. Er det måske en bedre måde for template matching at give crown videre på til canny?
+
 def load_and_prepare_template(path):
     """
     Loads a color template, converts to HSV, and returns both the full HSV and the HSV grayscale.
@@ -80,7 +78,7 @@ def main():
     search_thresh1 = 200
     search_thresh2 = 220
 
-    image_path = r"G:\Andre computere\My laptop\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\3.jpg"
+    image_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\18.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
@@ -118,7 +116,7 @@ def print_results(tiles, final_score, clusters):
 
 def train_model():
     # Load the training data
-    training_path = r"G:\Andre computere\My laptop\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    training_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 
