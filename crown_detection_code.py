@@ -1,8 +1,6 @@
+import os
 import cv2 as cv
 import numpy as np
-from PIL import Image
-
-from PIL import Image
 
 def detect_crowns(search_image_match, search_image_edges, templates_with_thresholds, search_thresh1, search_thresh2):
     """
@@ -81,32 +79,6 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
     
     return rects
 
-def overlay_images(background_path, foreground_path, output_path):
-    """
-    Overlays a PNG image with a transparent background onto a JPG image.
-
-    Args:
-        background_path (str): The path to the background JPG image.
-        foreground_path (str): The path to the foreground PNG image.
-        output_path (str): The path to save the resulting image.
-    """
-    try:
-        # Open the background and foreground images
-        background = Image.open(background_path).convert("RGBA")
-        foreground = Image.open(foreground_path).convert("RGBA")
-
-        # Paste the foreground onto the background using the alpha channel as a mask
-        background.paste(foreground, (0, 0), foreground)
-
-        # Save the resulting image
-        background.save(output_path, "PNG")
-        print(f"Image saved to {output_path}")
-
-    except FileNotFoundError as e:
-        print(f"Error: {e}. Please check the file paths.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
 def load_and_prepare_template(path):
     """
     Loads a color template, converts to HSV, and returns both the full HSV and the HSV grayscale.
@@ -123,19 +95,51 @@ def load_and_prepare_template(path):
     img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
     return img_hsv, img_hsv_gray
 
+def build_crown_templates(features_dir, template_count=18):
+    """
+    Loads konge_krone_1..N templates and attaches shared thresholds used by
+    template matching and Canny edge verification.
+    """
+    template_thresh1 = 140
+    template_thresh2 = 180
+    match_threshold = 0.65
+    edge_sim_threshold = 0.15
+
+    templates_with_thresholds = []
+    for idx in range(1, template_count + 1):
+        template_path = os.path.join(features_dir, f"konge_krone_{idx}.JPG")
+        if not os.path.isfile(template_path):
+            # Fallback if extension casing differs on disk
+            template_path = os.path.join(features_dir, f"konge_krone_{idx}.jpg")
+
+        template_hsv, template_hsv_gray = load_and_prepare_template(template_path)
+        if template_hsv is None or template_hsv_gray is None:
+            continue
+
+        templates_with_thresholds.append(
+            (
+                template_hsv,
+                template_hsv_gray,
+                template_thresh1,
+                template_thresh2,
+                match_threshold,
+                edge_sim_threshold,
+            )
+        )
+
+    print(f"Loaded {len(templates_with_thresholds)} crown templates for matching.")
+    return templates_with_thresholds
+
 def main():
     # 1. SETUP
-    main_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\59.jpg"
+    main_path = r"G:\Andre computere\My laptop\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\43.jpg"
     
-    # Pre-load crown templates with their specific thresholds
-    # Format: (img_hsv, img_v, template_thresh1, template_thresh2, match_threshold, edge_sim_threshold)
-    templates_with_thresholds = [
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_hr.jpg"), 180, 210, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_lr.jpg"), 130, 150, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_hr.jpg"), 140, 180, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_lr.jpg"), 80, 110, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund.jpg"), 140, 180, 0.6, 0.15)
-    ]
+    # Pre-load all konge_krone templates (1..18) used by template matching and Canny verification
+    features_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "features")
+    templates_with_thresholds = build_crown_templates(features_dir, template_count=18)
+    if not templates_with_thresholds:
+        print("No crown templates were loaded. Check the files in features/.")
+        return
 
     # Canny edge detection thresholds for the search image
     search_thresh1 = 200
@@ -144,9 +148,8 @@ def main():
     img_bgr = cv.imread(main_path)
     if img_bgr is None: raise FileNotFoundError("Image not found")
     
-    # Convert search image to HSV and extract channels
+    # Convert search image to HSV
     img_hsv = cv.cvtColor(img_bgr, cv.COLOR_BGR2HSV)
-    h_channel, s_channel, v_channel = cv.split(img_hsv)
     
     # Create a grayscale representation of the raw HSV matrix
     # (treats H as Blue, S as Green, V as Red to flatten them into 1 channel)
@@ -155,27 +158,6 @@ def main():
     # We are currently using full HSV for template match, and HSV grayscale for edge tests
     search_image_match = img_hsv
     search_image_edges = img_hsv_gray
-
-    # --- Visualization ---
-    cv.imshow("Original Image", img_bgr)
-    cv.imshow("HSV Grayscale", img_hsv_gray)
-    cv.imshow("Full HSV Image", img_hsv)
-    cv.imshow("HSV: Hue Channel", h_channel)
-    cv.imshow("HSV: Saturation Channel", s_channel)
-    cv.imshow("HSV: Value Channel", v_channel)
-
-    # Show Canny edges for search image
-    search_edges = cv.Canny(search_image_edges, search_thresh1, search_thresh2)
-    cv.imshow("Search Image Edges", search_edges)
-
-    # Show Canny edges for all templates for comparison
-    for i, template_data in enumerate(templates_with_thresholds):
-        _, template_hsv_gray, t_thresh1, t_thresh2, _, _ = template_data
-        if template_hsv_gray is not None:
-            template_edges = cv.Canny(template_hsv_gray, t_thresh1, t_thresh2)
-            cv.imshow(f"Template {i+1} Edges", template_edges)
-    
-    cv.waitKey(0) # Wait for a key press to continue
 
     print("Scanning for all crowns...")
 

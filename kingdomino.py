@@ -24,6 +24,42 @@ def load_and_prepare_template(path):
     img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
     return img_hsv, img_hsv_gray
 
+def build_crown_templates(features_dir, template_count=18):
+    """
+    Loads konge_krone_1..N templates and attaches shared thresholds used by
+    template matching and Canny edge verification.
+    """
+    # Shared thresholds for all konge_krone templates
+    template_thresh1 = 140
+    template_thresh2 = 180
+    match_threshold = 0.65
+    edge_sim_threshold = 0.15
+
+    crown_templates = []
+    for idx in range(1, template_count + 1):
+        template_path = os.path.join(features_dir, f"konge_krone_{idx}.JPG")
+        if not os.path.isfile(template_path):
+            # Fallback if extension casing differs on disk
+            template_path = os.path.join(features_dir, f"konge_krone_{idx}.jpg")
+
+        template_hsv, template_hsv_gray = load_and_prepare_template(template_path)
+        if template_hsv is None or template_hsv_gray is None:
+            continue
+
+        crown_templates.append(
+            (
+                template_hsv,
+                template_hsv_gray,
+                template_thresh1,
+                template_thresh2,
+                match_threshold,
+                edge_sim_threshold,
+            )
+        )
+
+    print(f"Loaded {len(crown_templates)} crown templates for matching.")
+    return crown_templates
+
 # Main function containing the backbone of the program
 def main():
     print("+-------------------------------+")
@@ -33,21 +69,18 @@ def main():
     # Train the Random Forest model
     model, feature_cols, label_encoder = train_model()
 
-    # Pre-load crown templates with their specific thresholds
-    # Format: (img_hsv, img_v, template_thresh1, template_thresh2, match_threshold, edge_sim_threshold)
-    crown_templates = [
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_hr.jpg"), 180, 210, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_blaa_baggrund_lr.jpg"), 130, 150, 0.7, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_hr.jpg"), 140, 180, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund_lr.jpg"), 80, 110, 0.6, 0.15),
-        (*load_and_prepare_template(r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\features\krone_sort_baggrund.jpg"), 140, 180, 0.6, 0.15)
-    ]
+    # Pre-load all konge_krone templates (1..18) used by template matching and Canny verification
+    features_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "features")
+    crown_templates = build_crown_templates(features_dir, template_count=18)
+    if not crown_templates:
+        print("No crown templates were loaded. Check the files in features/.")
+        return
 
     # Canny edge detection thresholds for the search image
     search_thresh1 = 200
     search_thresh2 = 220
 
-    image_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\3.jpg"
+    image_path = r"G:\Andre computere\My laptop\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\3.jpg"
     if not os.path.isfile(image_path):
         print("Image not found")
         return
@@ -85,7 +118,7 @@ def print_results(tiles, final_score, clusters):
 
 def train_model():
     # Load the training data
-    training_path = r"C:\Users\danie\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    training_path = r"G:\Andre computere\My laptop\Desktop\2. semester\Miniprojekt - kingdomino 1\Miniprojekt - kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 
