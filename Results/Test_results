@@ -1,0 +1,27 @@
+Detailed Report (Precision, Recall, F1-Score):
+              precision    recall  f1-score   support
+
+       blank       1.00      1.00      1.00         2
+       field       1.00      1.00      1.00       105
+     forrest       1.00      1.00      1.00        70
+   grassland       1.00      1.00      1.00        75
+        home       1.00      0.80      0.89        15
+        lake       1.00      1.00      1.00        60
+        mine       1.00      1.00      1.00        20
+       swamp       0.90      1.00      0.95        28
+
+    accuracy                           0.99       375
+   macro avg       0.99      0.97      0.98       375
+weighted avg       0.99      0.99      0.99       375
+
+
+
+
+========================================
+ SCORE ANALYSIS
+========================================
+ TOTAL BOARDS SCORED:  15
+ EXACT MATCH ACCURACY: 93.33% (14/15 perfect scores)
+ MEAN ABSOLUTE ERROR:  0.27 points off on average
+ ROOT MEAN SQ ERROR:   1.03 points
+ R-SQUARED (R²):       0.9986
