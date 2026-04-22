@@ -1,12 +1,15 @@
-# P0 base solution for AI Engineering
-This is the base code for the P0 projekt at AI Engineering, Aalborg University (Design og anvendelse af kunstig intelligens, DAKI).
+﻿# Kingdomino Pointberegner
 
-The purpose of the code is to get you quickly up and running with your P0 project.
+Dette er et miniprojekt udviklet på 2. semester på uddannelsen **Design og Anvendelse af Kunstig Intelligens** (Aalborg Universitet).
 
-## Getting started
-1. Clone this repository
-2. Install `python` and `opencv`
-3. Run `python kingdomino.py`
-4. You'll get an "Image not found"-error. Make sure that `image_path` on line 10 points to a valid file from the dataset.
-5. When you run again, each tile will be classified as Unknown.
-6. It is your job to change the zeros on lines 37-49 to some thresholds that work.
+## Formål
+Målet med projektet er at automatisere pointberegningen af afsluttede spilleplader i brætspillet Kingdomino. Ud fra et billede af spillepladen kan systemet automatisk udregne den samlede score og fremvise domænerne visuelt.
+
+## Hvordan er det lavet?
+Løsningen er bygget i Python og er opdelt i tre primære pipelines:
+1. **Machine Learning:** En Random Forest-model analyserer billedets HSV-farver og klassificerer de forskellige terræntyper på pladens 5x5 felter.
+2. **Computer Vision:** Template Matching og Canny Edge Detection bruges til præcist at lokalisere og tælle antallet af kroner.
+3. **Algoritmik:** En Flood-Fill algoritme samler ensartede naboterræner til lukkede områder (clusters) og beregner den korrekte score ud fra spillets regler (areal ganget med kroner).
+
+## Udviklere
+Daniel Rom Kristiansen & Oliver Richard Lundstrøm
