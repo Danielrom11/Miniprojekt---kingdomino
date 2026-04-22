@@ -7,9 +7,6 @@ from sklearn.preprocessing import LabelEncoder
 from point_calculator import calculate_score
 
 def load_and_prepare_template(path):
-    """
-    Loads a color template, converts to HSV, and returns both the full HSV and the HSV grayscale.
-    """
     img_bgr = cv.imread(path, cv.IMREAD_COLOR)
     if img_bgr is None:
         print(f"Warning: Could not load template at {path}")
@@ -23,11 +20,7 @@ def load_and_prepare_template(path):
     return img_hsv, img_hsv_gray
 
 def build_crown_templates(features_dir, template_count=18):
-    """
-    Loads konge_krone_1..N templates and attaches shared thresholds used by
-    template matching and Canny edge verification.
-    """
-    # Shared thresholds for all konge_krone templates
+    # Thresholds (template matching og edge detection) for alle konge_krone templates
     template_thresh1 = 140
     template_thresh2 = 180
     match_threshold = 0.65
@@ -37,7 +30,7 @@ def build_crown_templates(features_dir, template_count=18):
     for idx in range(1, template_count + 1):
         template_path = os.path.join(features_dir, f"konge_krone_{idx}.JPG")
         if not os.path.isfile(template_path):
-            # Fallback if extension casing differs on disk
+            # Fallback
             template_path = os.path.join(features_dir, f"konge_krone_{idx}.jpg")
 
         template_hsv, template_hsv_gray = load_and_prepare_template(template_path)
@@ -64,17 +57,17 @@ def main():
     print("| King Domino points calculator |")
     print("+-------------------------------+")
     
-    # Train the Random Forest model
+    # Træn Random Forest model
     model, feature_cols, label_encoder = train_model()
 
-    # Pre-load all konge_krone templates (1..18) used by template matching and Canny verification
+    # Pre-load alle konge_krone templates
     features_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "features")
     crown_templates = build_crown_templates(features_dir, template_count=18)
     if not crown_templates:
         print("No crown templates were loaded. Check the files in features/.")
         return
 
-    # Canny edge detection thresholds for the search image
+    # Canny edge detection thresholds for search billede
     search_thresh1 = 200
     search_thresh2 = 220
 
@@ -93,13 +86,13 @@ def main():
     print_results(tiles, final_score, clusters)
 
 def print_results(tiles, final_score, clusters):
-    """Prints the final results, including tile details, total score, and cluster breakdown."""
+    """Printer de endelige resultater"""
     print("\n======== TILE DETALJER ========")
-    # Sort the tiles by their (y, x) coordinates before printing
+    # Sorter tiles ud fra deres (y, x) koordinater før print
     for (x, y), tile_data in sorted(tiles.items(), key=lambda item: (item[0][1], item[0][0])):
         print(f"Tile ({x}, {y}):")
-        print(f"  Predicted Terrain: {tile_data['terrain']}")
-        print(f"  Crowns: {tile_data['crowns']}")
+        print(f"  Predicted Terræntype: {tile_data['terrain']}")
+        print(f"  Kroner: {tile_data['crowns']}")
         print("=====")
 
     print(f"\n======== RESULTAT ========")
@@ -115,12 +108,12 @@ def print_results(tiles, final_score, clusters):
     print("=====================================\n============================\n")
 
 def train_model():
-    # Load the training data
+    # Load trænings data
     training_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 
-    # Define feature columns
+    # Definer features og target
     metadata_cols = ["Reference", "Image", "Tile_X", "Tile_Y", "Predicted_Terrain"]
     target_col = "Manual_Label"
     feature_cols = [
@@ -129,25 +122,25 @@ def train_model():
         (col.startswith(("H_Bin", "S_Bin", "V_Bin")) or col in ["H_Median", "S_Median", "V_Median"])
     ]
 
-    # Prepare data for training
+    # Opdel data til træning
     X = df[feature_cols].fillna(df[feature_cols].median(numeric_only=True))
     y = df[target_col].astype(str)
 
-    # Encode labels
+    # Labelencoder
     label_encoder = LabelEncoder()
     y_encoded = label_encoder.fit_transform(y)
 
-    # Initialize and train the model
+    # Initialize og træn modellen med fundne parametre
     model = RandomForestClassifier(random_state=42, n_estimators=100, max_depth=None, min_samples_split=10)
     model.fit(X, y_encoded)
 
     return model, feature_cols, label_encoder
 
-# Break a board into tiles
+# Opdel boardet i tiles
 def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2):
     tiles = {}
     
-    # 1. Detect ALL crowns on the full image first to avoid boundary cut-offs
+    # 1. Detekter alle kroner i billedet først, så vi kan tildele dem til de rigtige tiles senere
     img_hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
     img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
     
@@ -168,7 +161,7 @@ def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search
                 terrain_features = get_terrain(tile)
                 predicted_terrain = predict_terrain(terrain_features, model, feature_cols, label_encoder)
                 
-                # 2. Check which crowns belong to this specific tile based on their center coordinates
+                # 2. check hvilke kroner der tilhører tile ud fra center koordinater.
                 tile_crowns_count = 0
                 for (cx, cy, cw, ch) in all_crown_rects:
                     center_x = cx + cw // 2
@@ -186,19 +179,19 @@ def get_tiles(image, model, feature_cols, label_encoder, crown_templates, search
                 print(f"An unexpected error occurred processing tile ({x_coord}, {y_coord}): {e}")
     return tiles
 
-# Determine the type of terrain in a tile
+# Bestem terræntype med bin_size=10 og histogram features
 def get_terrain(tile, bin_size=10):
     hsv_tile = cv.cvtColor(tile, cv.COLOR_BGR2HSV)
     
-    # Extract H, S, V channels
+    # Extract H, S, V kanaler
     h_channel = hsv_tile[:, :, 0].flatten()
     s_channel = hsv_tile[:, :, 1].flatten()
     v_channel = hsv_tile[:, :, 2].flatten()
 
-    # Get median HSV values
+    # Udregn median HSV værdier
     hue, saturation, value = np.median(hsv_tile, axis=(0, 1))
 
-    # Create histogram bins
+    # Opret histogram bins
     h_bins = np.arange(0, 190, bin_size)
     s_bins = np.arange(0, 260, bin_size)
     v_bins = np.arange(0, 260, bin_size)
@@ -207,25 +200,25 @@ def get_terrain(tile, bin_size=10):
     s_hist, _ = np.histogram(s_channel, bins=s_bins)
     v_hist, _ = np.histogram(v_channel, bins=v_bins)
 
-    # Create a dictionary to store all features
+    # Opret dict til features
     features = {
         'H_Median': round(hue, 2),
         'S_Median': round(saturation, 2),
         'V_Median': round(value, 2),
     }
 
-    # Add H histogram bins
+    # Tilføj H histogram bins
     for i, h_count in enumerate(h_hist):
         bin_range = i * 10
         features[f'H_Bin_{bin_range}-{bin_range+10}'] = int(h_count)
 
-    # Add S histogram bins
+    # Tilføj S histogram bins
     for i, s_count in enumerate(s_hist):
         bin_range = i * 10
         bin_end = bin_range + 10 if i < len(s_hist) - 1 else 255
         features[f'S_Bin_{bin_range}-{bin_end}'] = int(s_count)
 
-    # Add V histogram bins
+    # Tilføj V histogram bins
     for i, v_count in enumerate(v_hist):
         bin_range = i * 10
         bin_end = bin_range + 10 if i < len(v_hist) - 1 else 255
@@ -234,23 +227,21 @@ def get_terrain(tile, bin_size=10):
     return features
 
 def predict_terrain(terrain_features, model, feature_cols, label_encoder):
-    # Create a DataFrame from the features
-    # Ensure the order of columns matches the training data
+    # Opret en DataFrame fra featuresne
+    # Sørg for, at rækkefølgen på kolonnerne matcher træningsdataene
     features_df = pd.DataFrame([terrain_features])
     features_df = features_df[feature_cols]
 
-    # Predict the terrain type
+    # Predict terræntypen
     prediction_encoded = model.predict(features_df)
     prediction = label_encoder.inverse_transform(prediction_encoded)
     return prediction[0]
 
 def detect_crowns(search_image_match, search_image_edges, templates_with_thresholds, search_thresh1, search_thresh2):
-    """
-    Detects crowns using template matching and verifies with Canny edge comparison.
-    """
+    # Detektere crowns med template matching og verificerer med canny edge detection.
     potential_matches = []
 
-    # --- Step 1: Initial Template Matching ---
+    # --- Step 1: Start Template Matching ---
     for template_data in templates_with_thresholds:
         template_hsv, template_hsv_gray, t_thresh1, t_thresh2, match_thresh, edge_sim_thresh = template_data
         if template_hsv is None:
@@ -279,7 +270,7 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
                     curr_t_hsv = cv.rotate(resized_t_hsv, cv.ROTATE_90_COUNTERCLOCKWISE)
                     curr_t_gray = cv.rotate(resized_t_gray, cv.ROTATE_90_COUNTERCLOCKWISE)
                 
-                # Match on the HSV images
+                # Match på HSV images
                 res = cv.matchTemplate(search_image_match, curr_t_hsv, cv.TM_CCOEFF_NORMED)
                 loc = np.where(res >= match_thresh)
                 
@@ -288,7 +279,7 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
                     # Store the potential match rectangle, the *gray* template used, and its specific thresholds
                     potential_matches.append(([int(pt[0]), int(pt[1]), int(w), int(h)], curr_t_gray, t_thresh1, t_thresh2, edge_sim_thresh))
 
-    # --- Step 2: Verification with Canny Edge Matching ---
+    # --- Step 2: Verificering med Canny Edge Detection ---
     confirmed_rects = []
 
     search_edges = cv.Canny(search_image_edges, search_thresh1, search_thresh2)
@@ -296,24 +287,24 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
     for rect, template_gray, t_thresh1, t_thresh2, edge_sim_thresh in potential_matches:
         x, y, w, h = rect
         
-        # Get the region of interest (ROI) from the search image's edges
+        # Hent region of interest (ROI) fra search billedes edges
         roi_edges = search_edges[y:y+h, x:x+w]
         
-        # Get the edges of the template that made the match
+        # Hent edges fra den template der resulterede i et match. 
         template_edges = cv.Canny(template_gray, t_thresh1, t_thresh2)
         
-        # Ensure template_edges is not larger than roi_edges
+        # Fallback på template_edges ikke er større end roi_edges
         if template_edges.shape[0] > roi_edges.shape[0] or template_edges.shape[1] > roi_edges.shape[1]:
             continue
 
-        # Compare the ROI edges with the template edges
+        # Sammenlign ROI edges med template edges
         edge_res = cv.matchTemplate(roi_edges, template_edges, cv.TM_CCOEFF_NORMED)
         
-        # If the edges are a good match, confirm the detection
+        # Hvis edgesne er er godt match, bekræft detektionen
         if np.max(edge_res) >= edge_sim_thresh:
             confirmed_rects.append(rect)
 
-    # Group the confirmed rectangles to merge overlapping boxes
+    # Grupper de bekræftede rektangler for at merge overlappende kasser.
     rects, _ = cv.groupRectangles(confirmed_rects, groupThreshold=1, eps=0.5)
     
     return rects
