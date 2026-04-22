@@ -63,7 +63,7 @@ def main():
             {
                 "svc__C": [0.5, 1.0, 2.0],
                 "svc__gamma": ["scale", "auto"],
-                "svc__kernel": ["rbf"],
+                "svc__kernel": ["rbf", "linear", "poly"],
             },
         ),
         "XGBoost": (
