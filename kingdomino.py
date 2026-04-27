@@ -2,6 +2,7 @@ import os
 import cv2 as cv
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from point_calculator import calculate_score
@@ -56,6 +57,8 @@ def main():
     print("+-------------------------------+")
     print("| King Domino points calculator |")
     print("+-------------------------------+")
+
+    project_root = Path(__file__).resolve().parent
     
     # Træn Random Forest model
     model, feature_cols, label_encoder = train_model()
@@ -71,21 +74,21 @@ def main():
     search_thresh1 = 200
     search_thresh2 = 220
 
-    image_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\18.jpg"
-    if not os.path.isfile(image_path):
+    image_path = project_root / "Trainingset" / "7.jpg"
+    if not image_path.is_file():
         print("Image not found")
         return
 
-    image = cv.imread(image_path)
+    image = cv.imread(str(image_path))
     tiles = get_tiles(image, model, feature_cols, label_encoder, crown_templates, search_thresh1, search_thresh2)
     
     # Kør pointberegneren på den genererede tiles dict!
-    final_score, clusters = calculate_score(tiles)
+    final_score, clusters, bonus_messages = calculate_score(tiles)
     
     # Print all results
-    print_results(tiles, final_score, clusters)
+    print_results(tiles, final_score, clusters, bonus_messages)
 
-def print_results(tiles, final_score, clusters):
+def print_results(tiles, final_score, clusters, bonus_messages=None):
     """Printer de endelige resultater"""
     print("\n======== TILE DETALJER ========")
     # Sorter tiles ud fra deres (y, x) koordinater før print
@@ -95,21 +98,25 @@ def print_results(tiles, final_score, clusters):
         print(f"  Kroner: {tile_data['crowns']}")
         print("=====")
 
-    print(f"\n======== RESULTAT ========")
-    print(f"Billedets samlede score: {final_score}")
-    print(f"==========================\n")
-    
     print("\n======== DETALJERET REGNSKAB ========")
     for i, cluster in enumerate(clusters, 1):
         print(f"Område {i}: {cluster['terrain']}")
-        print(f"  Felter i alt: {cluster['tiles_count']}, Kroner i alt: {cluster['crowns_count']} => {cluster['score']} Point")
+        print(f"  Felter i alt: {cluster['tiles_count']}")
+        print(f"  Kroner i alt: {cluster['crowns_count']} => {cluster['score']} Point")
         print(f"  Består af koordinaterne: {cluster['coordinates']}")
         print("---------------------------------------")
+    if bonus_messages:
+        print("\n======== BONUS POINTS ========")
+        for message in bonus_messages:
+            print(message)
+    print(f"\n======== RESULTAT ========")
+    print(f"Billedets samlede score: {final_score}")
+    print(f"==========================\n")
     print("=====================================\n============================\n")
 
 def train_model():
     # Load trænings data
-    training_path = r"C:\Users\olive\Documents\GitHub\KingdominoMiniprojekt2mandsgruppe\Miniprojekt---kingdomino\Trainingset\kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    training_path = Path(__file__).resolve().parent / "Trainingset" / "kingdomino_tiles_hsv_histogram_kopi.xlsx"
     df = pd.read_excel(training_path)
     df = df[df["Manual_Label"].notna()].copy()
 

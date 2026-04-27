@@ -18,5 +18,18 @@ Løsningen er bygget i Python og er opdelt i tre primære pipelines:
 
    ![Flood Fill Resultat](figures/floodfill_resultat.png)
 
+## Kom i gang
+Installer dependencies fra projektroden:
+
+```bash
+pip install -r requirements.txt
+```
+
+Kør hovedprogrammet:
+
+```bash
+python kingdomino.py
+```
+
 ## Udviklere
 Daniel Rom Kristiansen & Oliver Richard Lundstrøm
