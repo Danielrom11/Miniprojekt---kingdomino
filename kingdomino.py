@@ -74,7 +74,7 @@ def main():
     search_thresh1 = 200
     search_thresh2 = 220
 
-    image_path = project_root / "Trainingset" / "7.jpg"
+    image_path = project_root / "Testset" / "74.jpg"
     if not image_path.is_file():
         print("Image not found")
         return
