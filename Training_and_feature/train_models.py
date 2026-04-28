@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 
 
 def main():
-    data_path = Path(__file__).resolve().parent / "Trainingset" / "kingdomino_tiles_hsv_histogram_kopi.xlsx"
+    data_path = Path(__file__).resolve().parent.parent / "Trainingset" / "kingdomino_tiles_hsv_histogram_kopi.xlsx"
     print(f"Loading dataset from: {data_path}")
 
     df = pd.read_excel(data_path)
@@ -35,7 +35,8 @@ def main():
         raise ValueError("No feature columns found.")
 
     X = df[feature_cols].fillna(df[feature_cols].median(numeric_only=True))
-    y = LabelEncoder().fit_transform(df[target_col].astype(str))
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(df[target_col].astype(str))
 
     X_train, X_test, y_train, y_test = train_test_split(
         X,
@@ -111,7 +112,16 @@ def main():
         print(f"Training accuracy: {train_acc:.4f}")
         print(f"Testing accuracy: {test_acc:.4f}")
         print("\nClassification report (test set):")
-        print(classification_report(y_test, test_pred, digits=4))
+        print(
+            classification_report(
+                y_test,
+                test_pred,
+                labels=list(range(len(label_encoder.classes_))),
+                target_names=label_encoder.classes_,
+                digits=4,
+                zero_division=0,
+            )
+        )
 
         results.append((name, train_acc, test_acc))
 

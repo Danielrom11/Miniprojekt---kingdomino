@@ -5,7 +5,7 @@ Best params: {'max_depth': None, 'min_samples_split': 10, 'n_estimators': 100}
 Training accuracy: 1.0000
 Testing accuracy: 0.9932
 
-Classification report (test set):
+Classification report (val set):
               precision    recall  f1-score   support
 
            0     1.0000    1.0000    1.0000         5
@@ -29,7 +29,7 @@ Best params: {'svc__C': 2.0, 'svc__gamma': 'scale', 'svc__kernel': 'rbf'}
 Training accuracy: 0.9975
 Testing accuracy: 0.9797
 
-Classification report (test set):
+Classification report (val set):
               precision    recall  f1-score   support
 
            0     0.8333    1.0000    0.9091         5
@@ -53,7 +53,7 @@ Best params: {'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_depth': 4, 'n_
 Training accuracy: 1.0000
 Testing accuracy: 0.9864
 
-Classification report (test set):
+Classification report (val set):
               precision    recall  f1-score   support
 
            0     1.0000    1.0000    1.0000         5

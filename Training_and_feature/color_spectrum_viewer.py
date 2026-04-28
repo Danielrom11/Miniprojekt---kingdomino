@@ -46,8 +46,16 @@ def display_image_color_spectrums(image_path):
     spectrum_lab = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2LAB)
     spectrum_lab = cv2.normalize(spectrum_lab, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     
-    # Create subplot with 8 images (2x4 grid)
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    # 9. HSV to Grayscale (convert HSV back to BGR, then to grayscale)
+    spectrum_hsv_bgr = cv2.cvtColor(spectrum_hsv, cv2.COLOR_HSV2BGR)
+    spectrum_hsv_gray = cv2.cvtColor(spectrum_hsv_bgr, cv2.COLOR_BGR2GRAY)
+    spectrum_hsv_gray = cv2.cvtColor(spectrum_hsv_gray, cv2.COLOR_GRAY2RGB)  # Convert back to RGB for display
+    
+    # 10-12. HSV individual channels (H, S, V)
+    h_channel, s_channel, v_channel = cv2.split(spectrum_hsv)
+    
+    # Create subplot with 13 images (4x4 grid)
+    fig, axes = plt.subplots(4, 4, figsize=(20, 16))
     axes = axes.flatten()
     
     axes[0].imshow(spectrum_bgr)
@@ -75,12 +83,32 @@ def display_image_color_spectrums(image_path):
     axes[5].axis('off')
     
     axes[6].imshow(spectrum_hsv)
-    axes[6].set_title('HSV')
+    axes[6].set_title('HSV (Combined)')
     axes[6].axis('off')
     
     axes[7].imshow(spectrum_lab)
     axes[7].set_title('LAB')
     axes[7].axis('off')
+    
+    axes[8].imshow(spectrum_hsv_gray)
+    axes[8].set_title('HSV Grayscale')
+    axes[8].axis('off')
+    
+    axes[9].imshow(h_channel, cmap='gray')
+    axes[9].set_title('HSV - H Channel (Hue)')
+    axes[9].axis('off')
+    
+    axes[10].imshow(s_channel, cmap='gray')
+    axes[10].set_title('HSV - S Channel (Saturation)')
+    axes[10].axis('off')
+    
+    axes[11].imshow(v_channel, cmap='gray')
+    axes[11].set_title('HSV - V Channel (Value)')
+    axes[11].axis('off')
+    
+    # Leave remaining slots empty
+    for i in range(12, 16):
+        axes[i].axis('off')
     
     plt.tight_layout()
     plt.show()
