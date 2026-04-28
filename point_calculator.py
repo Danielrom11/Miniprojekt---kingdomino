@@ -34,7 +34,7 @@ def _find_cluster(start_x, start_y, tiles, visited, grid_rows, grid_cols, terrai
     }
 
 def calculate_score(tiles, grid_rows=5, grid_cols=5):
-    """Beregner den samlede score for et King Domino spil, inklusiv bonusreglerne."""
+    """Beregner den samlede score for et Kingdomino spil, inklusiv bonusreglerne."""
     total_score = 0
     visited = set()
     clusters = []

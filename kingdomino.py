@@ -13,10 +13,10 @@ def load_and_prepare_template(path):
         print(f"Warning: Could not load template at {path}")
         return None, None
     
-    # Convert the image to HSV color space
+    # Konverter billede til HSV-spektrum
     img_hsv = cv.cvtColor(img_bgr, cv.COLOR_BGR2HSV)
     
-    # Create a grayscale representation of the raw HSV matrix for Canny edges
+    # Opret et gråskala repræsentation af HSV til Canny edges
     img_hsv_gray = cv.cvtColor(img_hsv, cv.COLOR_BGR2GRAY)
     return img_hsv, img_hsv_gray
 
@@ -49,13 +49,12 @@ def build_crown_templates(features_dir, template_count=18):
             )
         )
 
-    print(f"Loaded {len(crown_templates)} crown templates for matching.")
     return crown_templates
 
-# Main function containing the backbone of the program
+# Main function som indeholder backbone
 def main():
     print("+-------------------------------+")
-    print("| King Domino points calculator |")
+    print("| Kingdomino points calculator |")
     print("+-------------------------------+")
 
     project_root = Path(__file__).resolve().parent
@@ -85,7 +84,7 @@ def main():
     # Kør pointberegneren på den genererede tiles dict!
     final_score, clusters, bonus_messages = calculate_score(tiles)
     
-    # Print all results
+    # Print alle resultater
     print_results(tiles, final_score, clusters, bonus_messages)
 
 def print_results(tiles, final_score, clusters, bonus_messages=None):
@@ -112,7 +111,6 @@ def print_results(tiles, final_score, clusters, bonus_messages=None):
     print(f"\n======== RESULTAT ========")
     print(f"Billedets samlede score: {final_score}")
     print(f"==========================\n")
-    print("=====================================\n============================\n")
 
 def train_model():
     # Load trænings data
@@ -283,7 +281,7 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
                 
                 h, w = curr_t_gray.shape[:2]
                 for pt in zip(*loc[::-1]):
-                    # Store the potential match rectangle, the *gray* template used, and its specific thresholds
+                    # Gem potentielle matches med deres tilhørende thresholds for senere verifikation
                     potential_matches.append(([int(pt[0]), int(pt[1]), int(w), int(h)], curr_t_gray, t_thresh1, t_thresh2, edge_sim_thresh))
 
     # --- Step 2: Verificering med Canny Edge Detection ---
@@ -307,7 +305,7 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
         # Sammenlign ROI edges med template edges
         edge_res = cv.matchTemplate(roi_edges, template_edges, cv.TM_CCOEFF_NORMED)
         
-        # Hvis edgesne er er godt match, bekræft detektionen
+        # Hvis edgesne er et godt match, bekræft detektionen
         if np.max(edge_res) >= edge_sim_thresh:
             confirmed_rects.append(rect)
 
@@ -315,7 +313,6 @@ def detect_crowns(search_image_match, search_image_edges, templates_with_thresho
     rects, _ = cv.groupRectangles(confirmed_rects, groupThreshold=1, eps=0.5)
     
     return rects
-
 
 if __name__ == "__main__":
     main()
