@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "King Domino Analyzer",
+    "slug": "kingdomino-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/hero.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/hero.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "We need your camera to take a photo of the game board.",
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to select a game board image."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/hero.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "We need your camera to take a photo of the game board."
+        }
+      ]
+    ]
+  }
+}
